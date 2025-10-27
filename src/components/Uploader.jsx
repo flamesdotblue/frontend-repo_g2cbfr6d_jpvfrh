@@ -1,31 +1,57 @@
 import React, { useRef } from 'react';
 import { Upload, Download } from 'lucide-react';
+import JSZip from 'jszip';
 
 const sampleCsv = `date,merchant,category,amount,type\n2025-01-08,Swiggy,Food,349,Debit\n2025-01-08,Uber,Transport,189,Debit\n2025-01-07,PhonePe Wallet,Income,2000,Credit\n2025-01-06,Big Bazaar,Groceries,1249,Debit\n2025-01-05,Netflix,Entertainment,499,Debit\n2025-01-03,Amazon,Shopping,1799,Debit\n2025-01-02,Starbucks,Cafe,260,Debit\n2025-01-01,Rent,Household,12000,Debit`;
 
 export default function Uploader({ onData }) {
   const fileInputRef = useRef(null);
 
-  const handleFile = (file) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const text = reader.result;
-      const rows = text.trim().split(/\r?\n/);
-      const header = rows.shift().split(',').map((h) => h.trim().toLowerCase());
+  const parseCsvText = (text) => {
+    const rows = text.trim().split(/\r?\n/);
+    const header = rows.shift().split(',').map((h) => h.trim().toLowerCase());
 
-      const records = rows.map((row) => {
-        const cols = row.split(',');
-        const obj = {};
-        header.forEach((h, i) => (obj[h] = cols[i] ? cols[i].trim() : ''));
-        return normalize(obj);
-      });
-      onData(records);
-    };
-    reader.readAsText(file);
+    const records = rows.map((row) => {
+      const cols = row.split(',');
+      const obj = {};
+      header.forEach((h, i) => (obj[h] = cols[i] ? cols[i].trim() : ''));
+      return normalize(obj);
+    });
+    return records;
+  };
+
+  const handleFile = async (file) => {
+    try {
+      const name = file.name.toLowerCase();
+      if (name.endsWith('.zip')) {
+        const zip = await JSZip.loadAsync(file);
+        const csvFiles = zip.file(/\.csv$/i);
+        if (!csvFiles || csvFiles.length === 0) {
+          alert('No CSV file found inside the ZIP.');
+          return;
+        }
+        // If multiple CSVs exist, load the first one
+        const csvText = await csvFiles[0].async('string');
+        const records = parseCsvText(csvText);
+        onData(records);
+        return;
+      }
+
+      // Fallback to CSV text via FileReader
+      const reader = new FileReader();
+      reader.onload = () => {
+        const text = reader.result;
+        const records = parseCsvText(text);
+        onData(records);
+      };
+      reader.readAsText(file);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to read file. Please ensure it is a valid CSV or a ZIP containing a CSV.');
+    }
   };
 
   const normalize = (raw) => {
-    // Expecting keys like date, merchant, category, amount, type
     return {
       date: new Date(raw.date || Date.now()).toISOString(),
       merchant: raw.merchant || raw.narration || 'Unknown',
@@ -56,7 +82,7 @@ export default function Uploader({ onData }) {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
             <div>
               <h2 className="text-xl md:text-2xl font-semibold">Upload your PhonePe statement</h2>
-              <p className="mt-1 text-slate-400">Drag and drop a CSV file, or use the button below. We process everything locally in your browser.</p>
+              <p className="mt-1 text-slate-400">Drag and drop a CSV or ZIP file, or use the button below. We process everything locally in your browser.</p>
             </div>
             <div className="flex items-center gap-3">
               <button
@@ -64,7 +90,7 @@ export default function Uploader({ onData }) {
                 className="inline-flex items-center gap-2 rounded-lg bg-violet-500 hover:bg-violet-600 active:bg-violet-700 transition-colors px-4 py-2 text-white"
               >
                 <Upload className="w-4 h-4" />
-                <span>Choose CSV</span>
+                <span>Choose File</span>
               </button>
               <button
                 onClick={() => onData(sampleCsv.split(/\r?\n/).slice(1).map((row) => {
@@ -86,7 +112,7 @@ export default function Uploader({ onData }) {
           </div>
           <input
             type="file"
-            accept=".csv,text/csv"
+            accept=".csv,text/csv,.zip,application/zip"
             ref={fileInputRef}
             onChange={(e) => e.target.files && handleFile(e.target.files[0])}
             className="hidden"
