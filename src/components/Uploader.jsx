@@ -23,31 +23,24 @@ export default function Uploader({ onData }) {
   const handleFile = async (file) => {
     try {
       const name = file.name.toLowerCase();
-      if (name.endsWith('.zip')) {
-        const zip = await JSZip.loadAsync(file);
-        const csvFiles = zip.file(/\.csv$/i);
-        if (!csvFiles || csvFiles.length === 0) {
-          alert('No CSV file found inside the ZIP.');
-          return;
-        }
-        // If multiple CSVs exist, load the first one
-        const csvText = await csvFiles[0].async('string');
-        const records = parseCsvText(csvText);
-        onData(records);
+      if (!name.endsWith('.zip')) {
+        alert('Please upload a ZIP file that contains a CSV.');
         return;
       }
 
-      // Fallback to CSV text via FileReader
-      const reader = new FileReader();
-      reader.onload = () => {
-        const text = reader.result;
-        const records = parseCsvText(text);
-        onData(records);
-      };
-      reader.readAsText(file);
+      const zip = await JSZip.loadAsync(file);
+      const csvFiles = zip.file(/\.csv$/i);
+      if (!csvFiles || csvFiles.length === 0) {
+        alert('No CSV file found inside the ZIP.');
+        return;
+      }
+      // Load the first CSV inside the archive
+      const csvText = await csvFiles[0].async('string');
+      const records = parseCsvText(csvText);
+      onData(records);
     } catch (err) {
       console.error(err);
-      alert('Failed to read file. Please ensure it is a valid CSV or a ZIP containing a CSV.');
+      alert('Failed to read ZIP. Please ensure it is a valid ZIP containing a CSV file.');
     }
   };
 
@@ -82,7 +75,7 @@ export default function Uploader({ onData }) {
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
             <div>
               <h2 className="text-xl md:text-2xl font-semibold">Upload your PhonePe statement</h2>
-              <p className="mt-1 text-slate-400">Drag and drop a CSV or ZIP file, or use the button below. We process everything locally in your browser.</p>
+              <p className="mt-1 text-slate-400">Drag and drop a ZIP file containing a CSV, or use the button below. We process everything locally in your browser.</p>
             </div>
             <div className="flex items-center gap-3">
               <button
@@ -90,7 +83,7 @@ export default function Uploader({ onData }) {
                 className="inline-flex items-center gap-2 rounded-lg bg-violet-500 hover:bg-violet-600 active:bg-violet-700 transition-colors px-4 py-2 text-white"
               >
                 <Upload className="w-4 h-4" />
-                <span>Choose File</span>
+                <span>Choose ZIP</span>
               </button>
               <button
                 onClick={() => onData(sampleCsv.split(/\r?\n/).slice(1).map((row) => {
@@ -112,7 +105,7 @@ export default function Uploader({ onData }) {
           </div>
           <input
             type="file"
-            accept=".csv,text/csv,.zip,application/zip"
+            accept=".zip,application/zip,application/x-zip-compressed"
             ref={fileInputRef}
             onChange={(e) => e.target.files && handleFile(e.target.files[0])}
             className="hidden"
